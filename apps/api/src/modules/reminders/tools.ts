@@ -22,7 +22,7 @@ export function createReminderTools(reminders: RemindersService): ToolSet {
         try {
           const reminder = reminders.create(ctx.elder, input);
           return reminder.dueAt
-            ? `Reminder set for ${reminder.dueText}. I'll send a WhatsApp nudge then.`
+            ? `Reminder set for ${reminder.dueText}. I'll send them a message then.`
             : `Reminder saved: "${reminder.what}" — ${reminder.dueText}.`;
         } catch (err) {
           if (err instanceof ValidationError) {

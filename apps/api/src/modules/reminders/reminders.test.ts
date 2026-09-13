@@ -86,7 +86,7 @@ describe("RemindersService", () => {
     const { tools, mak } = build(createTestDb());
     const ctx = testContext({ elder: mak });
     await expect(tools.create_reminder!.run({ what: "Pay bill", dueText: "at noon", dueAt: "2026-09-13T12:00:00+08:00" }, ctx)).resolves.toBe(
-      "Reminder set for at noon. I'll send a WhatsApp nudge then.",
+      "Reminder set for at noon. I'll send them a message then.",
     );
     await expect(tools.create_reminder!.run({ what: "Pay bill", dueText: "next week" }, ctx)).resolves.toBe(
       'Reminder saved: "Pay bill" — next week.',
