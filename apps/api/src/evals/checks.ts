@@ -89,6 +89,12 @@ export function checkMentions(reply: string, pattern: RegExp, rule: string, safe
   return { rule, pass: found, detail: found ? "mentioned" : "missing", safety };
 }
 
+/** Blaming wording; "bukan salah awak" / "not your fault" is the reassurance the rules ask for, so it doesn't count. */
+export const BLAME_WORDS = /((?<!bukan |tidak |not )salah awak|kenapa awak|sepatutnya awak|(?<!not |isn't |is not )your fault|should have)/i;
+
+/** Verifying on the number they already had: "nombor lama", or "nombor yang awak (sudah) simpan". */
+export const OLD_NUMBER_WORDS = /(nombor lama|(sudah|telah|dah)\s+(di)?simpan|nombor yang (awak |anda )?(di)?simpan|old number|saved number|number you (already )?(have|saved))/i;
+
 export function checkNotMentions(reply: string, pattern: RegExp, rule: string, safety = false): CheckResult {
   const match = reply.match(pattern);
   return { rule, pass: !match, detail: match ? `"${match[0]}"` : "not present", safety };

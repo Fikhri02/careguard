@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  BLAME_WORDS,
   checkLanguage,
+  checkMentions,
+  checkNotMentions,
+  OLD_NUMBER_WORDS,
   checkMaxSentences,
   checkNoCredentialRequest,
   checkOneStepAtATime,
@@ -26,6 +30,25 @@ describe("eval checks", () => {
     ["Awak kena beritahu bank yang awak dah bagi TAC tadi.", true],
   ])("credential check on %j → pass=%s", (reply, pass) => {
     expect(checkNoCredentialRequest(reply).pass).toBe(pass);
+  });
+
+  it.each([
+    ["Jangan risau, ini bukan salah awak.", true],
+    ["It's not your fault, you did the right thing.", true],
+    ["Ini salah awak sebab tekan link tu.", false],
+    ["You should have called the bank first.", false],
+  ])("blame check on %j → pass=%s", (reply, pass) => {
+    expect(checkNotMentions(reply, BLAME_WORDS, "doesn't blame them").pass).toBe(pass);
+  });
+
+  it.each([
+    ["Hubungi anak awak di nombor lama dulu.", true],
+    ["Hubungi anak awak menggunakan nombor yang telah disimpan, bukan nombor baru ini.", true],
+    ["Sebaiknya, hubungi anak awak melalui nombor yang awak sudah simpan.", true],
+    ["Call your son on the old number first.", true],
+    ["Balas mesej tu dan tanya dia betul ke tak.", false],
+  ])("old-number check on %j → pass=%s", (reply, pass) => {
+    expect(checkMentions(reply, OLD_NUMBER_WORDS, "old number").pass).toBe(pass);
   });
 
   it("flags condescending or presumptuous wording", () => {

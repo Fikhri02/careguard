@@ -6,6 +6,7 @@ import type { Logger } from "../ports/logger.js";
 import type { Messenger } from "../ports/messenger.js";
 import type { Services } from "../services.js";
 import { careguardSystemPrompt } from "./prompts/careguard.js";
+import { localizeWarningHeader, replyLanguageHint, toolsForTurn } from "./reply-format.js";
 import { runTurn } from "./runner.js";
 import type { ToolSet } from "./tool.js";
 import type { TurnQueue } from "./turn-queue.js";
@@ -72,9 +73,9 @@ export function createInboundPipeline({
         try {
           const { reply, newMessages } = await runTurn({
             elder,
-            system: systemPrompt(clock.now()),
+            system: [systemPrompt(clock.now()), replyLanguageHint(history)].filter(Boolean).join("\n\n"),
             history,
-            tools,
+            tools: toolsForTurn(tools, history),
             llm,
             messenger: turn.messenger,
             clock,
@@ -83,7 +84,7 @@ export function createInboundPipeline({
           });
           services.conversation.append(elder.id, newMessages);
 
-          const body = reply.trim() || FALLBACK_REPLY;
+          const body = localizeWarningHeader(reply.trim()) || FALLBACK_REPLY;
           if (!(await turn.messenger.send({ to: elder.phone, body }))) log.warn("reply not delivered", { elderId: elder.id });
           return { status: "replied", reply: body, events: services.events.list({ elderId: elder.id, since: startedAt }) };
         } catch (err) {
