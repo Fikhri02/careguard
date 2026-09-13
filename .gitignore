@@ -1,5 +1,13 @@
 node_modules
 .env
+.env.local
 dist
 *.log
 .DS_Store
+data/
+*.db
+*.db-shm
+*.db-wal
+.next/
+next-env.d.ts
+*.tsbuildinfo

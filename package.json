@@ -1,30 +1,20 @@
 {
-  "name": "agents-everywhere-starter",
-  "version": "1.0.0",
+  "name": "careguard",
   "private": true,
   "type": "module",
-  "description": "One agent brain, many surfaces. Starter for the 'Agents, Everywhere' hackathon.",
+  "workspaces": ["packages/*", "apps/*"],
+  "engines": { "node": ">=22.12" },
   "scripts": {
-    "cli": "tsx src/surfaces/cli.ts",
-    "server": "tsx src/surfaces/server.ts",
-    "slack": "tsx src/surfaces/slack.ts",
-    "whatsapp": "tsx src/surfaces/whatsapp.ts",
-    "scam": "tsx src/surfaces/scamguard.ts",
-    "careguard": "tsx src/surfaces/careguard.ts",
-    "dev": "tsx watch src/surfaces/server.ts",
-    "typecheck": "tsc --noEmit",
-    "build": "tsc"
-  },
-  "dependencies": {
-    "@slack/bolt": "^4.2.0",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "openai": "^4.77.0"
+    "dev:api": "npm run dev -w @careguard/api",
+    "dev:dashboard": "npm run dev -w @careguard/dashboard",
+    "cli": "npm run cli -w @careguard/api",
+    "test": "vitest run",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build:dashboard": "npm run build -w @careguard/dashboard"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.0"
   }
 }
