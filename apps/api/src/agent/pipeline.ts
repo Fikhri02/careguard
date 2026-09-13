@@ -5,6 +5,7 @@ import type { Llm } from "../ports/llm.js";
 import type { Logger } from "../ports/logger.js";
 import type { Messenger } from "../ports/messenger.js";
 import type { Services } from "../services.js";
+import { familyContext } from "./family-context.js";
 import { careguardSystemPrompt } from "./prompts/careguard.js";
 import { localizeWarningHeader, replyLanguageHint, toolsForTurn } from "./reply-format.js";
 import { runTurn } from "./runner.js";
@@ -73,7 +74,9 @@ export function createInboundPipeline({
         try {
           const { reply, newMessages } = await runTurn({
             elder,
-            system: [systemPrompt(clock.now()), replyLanguageHint(history)].filter(Boolean).join("\n\n"),
+            system: [systemPrompt(clock.now()), familyContext(services.family.list(elder.id)), replyLanguageHint(history)]
+              .filter(Boolean)
+              .join("\n\n"),
             history,
             tools: toolsForTurn(tools, history),
             llm,
