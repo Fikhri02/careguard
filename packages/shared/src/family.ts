@@ -10,3 +10,4 @@ export const FamilyMember = z.object({
   createdAt: z.string(),
 });
 export type FamilyMember = z.infer<typeof FamilyMember>;
+export type FamilyListResponse = { family: FamilyMember[] };

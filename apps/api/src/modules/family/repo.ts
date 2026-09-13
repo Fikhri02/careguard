@@ -43,6 +43,9 @@ export function createFamilyRepo(db: Db) {
         db.prepare("SELECT * FROM family_members WHERE phone = ? ORDER BY created_at, rowid").all(phone) as FamilyRow[]
       ).map(toMember);
     },
+    listAll(): FamilyMember[] {
+      return (db.prepare("SELECT * FROM family_members ORDER BY created_at, rowid").all() as FamilyRow[]).map(toMember);
+    },
     listByElder(elderId: string): FamilyMember[] {
       return (
         db.prepare("SELECT * FROM family_members WHERE elder_id = ? ORDER BY created_at, rowid").all(elderId) as FamilyRow[]

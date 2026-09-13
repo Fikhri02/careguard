@@ -56,7 +56,7 @@ export function AttentionCard({ event, elderName, now, pending, onDecide }: Atte
           {pending === "dismiss" ? "Dismissing…" : "Dismiss"}
         </button>
       </div>
-      <p className="alert-hint">Approving sends {elderName} a WhatsApp saying the family has seen it and they’re safe.</p>
+      <p className="alert-hint">Approving sends {elderName} a message saying the family has seen it and they’re safe.</p>
     </article>
   );
 }

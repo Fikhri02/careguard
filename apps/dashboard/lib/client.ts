@@ -1,4 +1,4 @@
-import type { ApiError, CareEvent, Elder, ElderListResponse } from "@careguard/shared";
+import type { ApiError, CareEvent, Elder, ElderListResponse, FamilyListResponse, FamilyMember } from "@careguard/shared";
 
 /** Browser-side calls. Relative URLs go through this app's rewrite to the API. */
 
@@ -38,6 +38,30 @@ export async function sendToElder(elderId: string, text: string): Promise<boolea
     throw new Error(body?.error.message ?? `CareGuard responded ${res.status}.`);
   }
   return ((await res.json()) as { delivered: boolean }).delivered;
+}
+
+export async function fetchFamily(): Promise<FamilyMember[]> {
+  try {
+    const res = await fetch("/api/family");
+    if (!res.ok) return [];
+    return ((await res.json()) as FamilyListResponse).family;
+  } catch {
+    return [];
+  }
+}
+
+/** Marks someone who already chats with CareGuard as an elder's family. */
+export async function labelAsFamily(personId: string, elderId: string): Promise<FamilyMember> {
+  const res = await fetch("/api/family", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ personId, elderId }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as ApiError | null;
+    throw new Error(body?.error.message ?? `CareGuard responded ${res.status}.`);
+  }
+  return (await res.json()) as FamilyMember;
 }
 
 export async function fetchElders(): Promise<Elder[]> {

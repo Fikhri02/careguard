@@ -1,12 +1,13 @@
 "use client";
 
-import type { CareEvent, Elder, StreamMessage } from "@careguard/shared";
+import type { CareEvent, Elder, FamilyMember, StreamMessage } from "@careguard/shared";
 import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import { CopilotPopup } from "@copilotkit/react-ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { decide, DecisionError, fetchElders, sendToElder, type Decision } from "../../lib/client";
+import { decide, DecisionError, fetchElders, fetchFamily, labelAsFamily, sendToElder, type Decision } from "../../lib/client";
 import { elderLabel, EVENT_LABEL, isExample, needsAttention, reasonsOf, upsertEvent } from "../../lib/format";
 import { AttentionCard } from "./attention-card";
+import { People } from "./people";
 import { Timeline } from "./timeline";
 
 type Connection = "connecting" | "live" | "reconnecting";
@@ -36,6 +37,25 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
   const [pending, setPending] = useState<Record<string, Decision>>({});
   const [notice, setNotice] = useState<Notice | null>(null);
   const [now, setNow] = useState<number | null>(null);
+  const [family, setFamily] = useState<FamilyMember[]>([]);
+  const [labelling, setLabelling] = useState<string | null>(null);
+
+  // People appear once they message the bot, which doesn't always create an event, so refresh them regularly.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      const [list, members] = await Promise.all([fetchElders(), fetchFamily()]);
+      if (cancelled) return;
+      if (list.length > 0) setElders(new Map(list.map((e) => [e.id, e])));
+      setFamily(members);
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   // Relative times render only after mount, so server and browser markup always match.
   useEffect(() => {
@@ -102,6 +122,25 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
     [elders],
   );
 
+  const onLabel = useCallback(
+    async (person: Elder, elderId: string) => {
+      setLabelling(person.id);
+      try {
+        await labelAsFamily(person.id, elderId);
+        setFamily(await fetchFamily());
+        setNotice({
+          tone: "ok",
+          text: `${elderLabel(elders, person.id)} is now family of ${elderLabel(elders, elderId)} — scam alerts will reach them straight away.`,
+        });
+      } catch (err) {
+        setNotice({ tone: "error", text: err instanceof Error ? err.message : "Something went wrong. Try again." });
+      } finally {
+        setLabelling(null);
+      }
+    },
+    [elders],
+  );
+
   const attention = useMemo(() => events.filter(needsAttention), [events]);
   const counts = useMemo(
     () => ({
@@ -111,7 +150,10 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
     }),
     [events],
   );
-  const watching = [...elders.values()].map((e) => e.name ?? e.phone.replace(/^whatsapp:/, ""));
+  // Anyone labelled as family is not someone CareGuard looks after.
+  const familyAddresses = useMemo(() => new Set(family.map((m) => m.phone)), [family]);
+  const relatives = useMemo(() => [...elders.values()].filter((e) => !familyAddresses.has(e.phone)), [elders, familyAddresses]);
+  const watching = relatives.map((e) => e.name ?? e.phone.replace(/^(whatsapp|telegram):/, ""));
 
   // What the copilot may read: the same activity the family sees, in plain terms.
   const copilotActivity = useMemo(
@@ -171,7 +213,7 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
         { name: "message", type: "string", description: "The exact message to send, written as the family member speaking", required: true },
       ],
       handler: async ({ elderName, message }) => {
-        const list = [...elders.values()];
+        const list = relatives;
         const wanted = elderName.trim().toLowerCase();
         const elder = list.find((e) => (e.name ?? "").trim().toLowerCase() === wanted) ?? (list.length === 1 ? list[0] : undefined);
         if (!elder) return `I couldn't tell which relative "${elderName}" is. Ask the family member to pick one of: ${watching.join(", ")}.`;
@@ -191,7 +233,7 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
         }
       },
     },
-    [elders, watching],
+    [elders, relatives, watching],
   );
 
   const firstElder = watching[0] ?? "your family";
@@ -263,6 +305,8 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
             <Timeline events={events} elders={elders} now={now} />
           </section>
         </div>
+
+        <People people={[...elders.values()]} family={family} busyId={labelling} onLabel={onLabel} />
       </main>
 
       <CopilotPopup

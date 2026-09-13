@@ -1,5 +1,6 @@
 import type { RequestHandler } from "express";
 import request from "supertest";
+import { CapturingMessenger } from "../adapters/capturing-messenger.js";
 import { describe, expect, it } from "vitest";
 import { REASSURANCE } from "../modules/events/service.js";
 import { silentLogger } from "../test/fakes.js";
@@ -63,6 +64,23 @@ describe("HTTP app", () => {
     const res = await request(app).get("/api/events?status=open");
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("validation_error");
+  });
+
+  it("labels a Telegram person as an elder's family, so scam alerts reach their chat", async () => {
+    const { app, services, mak } = setup();
+    const son = services.elders.findOrCreateByPhone("telegram:555001", "Irfan");
+
+    const res = await request(app).post("/api/family").send({ personId: son.id, elderId: mak.id });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ elderId: mak.id, name: "Irfan", phone: "telegram:555001", telegramChatId: "555001" });
+    expect((await request(app).get("/api/family")).body.family).toHaveLength(1);
+
+    const alerts = new CapturingMessenger();
+    await services.family.notify(mak, "fake Maybank SMS", alerts);
+    expect(alerts.sent.map((m) => m.to)).toEqual(["telegram:555001"]);
+
+    expect((await request(app).post("/api/family").send({ personId: mak.id, elderId: mak.id })).status).toBe(400);
+    expect((await request(app).post("/api/family").send({ personId: "eld_missing", elderId: mak.id })).status).toBe(404);
   });
 
   it("sends a family message to the elder, and rejects empty text or an unknown elder", async () => {

@@ -7,6 +7,8 @@ import type { Logger } from "../../ports/logger.js";
 import type { Messenger } from "../../ports/messenger.js";
 import type { FamilyRepo } from "./repo.js";
 
+const TELEGRAM_PREFIX = "telegram:";
+
 /** One scam means one message to the family: a repeat alert inside this window is skipped. */
 const REALERT_WINDOW_MS = 30 * 60 * 1000;
 
@@ -18,6 +20,12 @@ export interface NotifyOptions {
 export interface FamilyService {
   register(elderId: string, input: { phone: string; name?: string | null }): FamilyMember;
   list(elderId: string): FamilyMember[];
+  listAll(): FamilyMember[];
+  /**
+   * Marks someone who already chats with CareGuard as an elder's family (labelled on the dashboard).
+   * Their channel address is stored as the family "phone"; a Telegram person is alerted in their chat.
+   */
+  labelAsFamily(elderId: string, person: Elder): FamilyMember;
   /** The messenger is per turn, so simulated turns capture alerts instead of sending them. */
   notify(elder: Elder, summary: string, messenger: Messenger, options?: NotifyOptions): Promise<{ delivered: number; total: number }>;
   /** True when the family received an alert about this elder in the last 30 minutes. */
@@ -48,6 +56,21 @@ export function createFamilyService({ repo, clock, log }: { repo: FamilyRepo; cl
       return normalized ? repo.linkTelegramByPhone(normalized, chatId) : [];
     },
     list: (elderId) => repo.listByElder(elderId),
+    listAll: () => repo.listAll(),
+    labelAsFamily(elderId, person) {
+      if (person.id === elderId) throw new ValidationError("Someone can't be marked as their own family.");
+      const member = repo.upsert({
+        id: newId("fam"),
+        elderId,
+        name: person.name,
+        phone: person.phone,
+        telegramChatId: null,
+        createdAt: clock.now().toISOString(),
+      });
+      if (!person.phone.startsWith(TELEGRAM_PREFIX)) return member;
+      const chatId = person.phone.slice(TELEGRAM_PREFIX.length);
+      return repo.linkTelegramByPhone(person.phone, chatId).find((m) => m.elderId === elderId) ?? member;
+    },
     alertedRecently(elderId) {
       const at = lastAlertAt.get(elderId);
       return at !== undefined && clock.now().getTime() - at < REALERT_WINDOW_MS;
@@ -63,17 +86,17 @@ export function createFamilyService({ repo, clock, log }: { repo: FamilyRepo; cl
         : `⚠️ CareGuard alert: ${who} just received a likely scam (${summary}). ` +
           "I've told them not to click anything or share any details. It might be worth a quick call to check in.";
       // A member who linked Telegram is alerted there; otherwise by phone (WhatsApp).
-      const results = await Promise.all(
-        members.map((member) =>
-          messenger.send({ to: member.telegramChatId ? `telegram:${member.telegramChatId}` : member.phone, body }),
-        ),
-      );
+      // One message per destination, even if the same person was added twice (by number and from the dashboard).
+      const destinations = [
+        ...new Set(members.map((member) => (member.telegramChatId ? `telegram:${member.telegramChatId}` : member.phone))),
+      ];
+      const results = await Promise.all(destinations.map((to) => messenger.send({ to, body })));
       const delivered = results.filter(Boolean).length;
       if (delivered > 0) lastAlertAt.set(elder.id, clock.now().getTime());
-      if (delivered < members.length) {
-        log.warn("family alert partly undelivered", { elderId: elder.id, delivered, total: members.length });
+      if (delivered < destinations.length) {
+        log.warn("family alert partly undelivered", { elderId: elder.id, delivered, total: destinations.length });
       }
-      return { delivered, total: members.length };
+      return { delivered, total: destinations.length };
     },
   };
 }

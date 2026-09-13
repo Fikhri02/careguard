@@ -2,6 +2,7 @@ import express, { type Express, type RequestHandler } from "express";
 import type { Config } from "../infra/config.js";
 import { createEldersRouter } from "../modules/elders/routes.js";
 import { createEventsRouter } from "../modules/events/routes.js";
+import { createFamilyRouter } from "../modules/family/routes.js";
 import { createRemindersRouter } from "../modules/reminders/routes.js";
 import type { Logger } from "../ports/logger.js";
 import type { Services } from "../services.js";
@@ -35,6 +36,7 @@ export function createApp({ config, log, services, checkDb, whatsappWebhook, sim
   api.use(requireFamily);
   api.use("/elders", createEldersRouter(services.elders, services.events));
   api.use("/events", createEventsRouter(services.events));
+  api.use("/family", createFamilyRouter(services.family, services.elders));
   api.use("/reminders", createRemindersRouter(services.reminders));
   api.get("/stream", createStreamHandler(services.bus));
   app.use("/api", api);
