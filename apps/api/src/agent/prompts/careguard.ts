@@ -26,6 +26,10 @@ export function careguardSystemPrompt(now: Date): string {
   return (
     `${CAREGUARD_PROMPT}\n\n` +
     `Today is ${today} (Malaysia time, UTC+8). When a reminder has a clear date and time, pass dueAt as ISO-8601 with +08:00. ` +
-    "After explaining a bill, letter or appointment, call log_document once so the family timeline shows it."
+    "Tools only happen when you call them, so never say you will do something later — call the tool in this same reply, then tell the user it is done. " +
+    "When you explain a bill, letter or appointment, call log_document in that same reply so the family timeline shows it. " +
+    "When the user sends or forwards anything that might be a scam, call investigate_message before you answer. " +
+    "When the user agrees to tell their family: if a family number is already saved or they give one now, call register_family if needed and then notify_family in that same reply. " +
+    "Keep replying in the language the user normally writes in, even when the forwarded message is in another language."
   );
 }
