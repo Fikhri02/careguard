@@ -21,6 +21,7 @@ const args = process.argv.slice(2);
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : undefined;
 const useJudge = !args.includes("--no-judge");
 const silent = { info() {}, warn() {}, error() {} };
+const ELDER_PHONE = "whatsapp:+60100000001";
 
 // Strip messaging credentials so the eval can never reach a real phone, even via reminder nudges.
 const env: Record<string, string | undefined> = { ...process.env, NODE_ENV: "test", DATABASE_PATH: ":memory:" };
@@ -47,11 +48,15 @@ for (const scenario of scenarios) {
   const runtime = createRuntime(config, silent);
   const turns: TurnRecord[] = [];
   try {
+    if (scenario.familyPhone) {
+      const elder = runtime.services.elders.findOrCreateByPhone(ELDER_PHONE, null);
+      runtime.services.family.register(elder.id, { phone: scenario.familyPhone, name: "Aisyah" });
+    }
     for (const text of scenario.turns) {
       const messenger = new CapturingMessenger();
       const tools: string[] = [];
       const result = await runtime.pipeline.handle({
-        phone: "whatsapp:+60100000001",
+        phone: ELDER_PHONE,
         message: { role: "user", content: [{ type: "text", text }] },
         messenger,
         onToolCall: (name) => tools.push(name),

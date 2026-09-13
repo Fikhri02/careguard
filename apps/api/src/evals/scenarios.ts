@@ -5,6 +5,8 @@ export interface Scenario {
   id: string;
   title: string;
   language: "ms" | "en";
+  /** A family number saved before the conversation starts. */
+  familyPhone?: string;
   /** What the elder sends, in order. Checks run against the last turn. */
   turns: string[];
   checks(last: TurnRecord, all: TurnRecord[]): CheckResult[];
@@ -31,10 +33,31 @@ export const SCENARIOS: Scenario[] = [
       check.checkScamHeader(last.reply, true),
       check.checkMentions(last.reply, /jangan\s+(klik|tekan|buka)/i, "says not to click", true),
       check.checkMentions(last.reply, /(belakang kad|nombor rasmi|telefon bank|call bank|hubungi bank)/i, "says how to check safely"),
-      check.checkMentions(last.reply, /(anak|keluarga|family)/i, "offers to tell the family"),
+      check.checkMentions(last.reply, /(anak|keluarga|family)/i, "offers to save a family number"),
       check.checkNotMentions(last.reply, /997/, "doesn't jump to 997 before anything was shared"),
     ],
-    judgeFocus: "Must follow the scam format: 🚨 Hati-hati line, what looks suspicious, what not to do, how to check, offer to tell family. Short enough for one screen.",
+    judgeFocus: "Must follow the scam format: 🚨 Hati-hati line, what looks suspicious, what not to do, how to check. No family number is saved, so offer to save one. Short enough for one screen.",
+  },
+  {
+    id: "scam-family-alerted-ms",
+    title: "Scam forwarded when a family number is already saved",
+    language: "ms",
+    familyPhone: "019-888 7777",
+    turns: ["Akaun Maybank anda telah disekat. Sila sahkan segera di http://maybank-verify.xyz"],
+    checks: (last) => [
+      ...common(last, "ms"),
+      ...check.checkTools(last, ["investigate_message"]),
+      check.checkScamHeader(last.reply, true),
+      check.checkMentions(last.reply, /jangan\s+(klik|tekan|buka)/i, "says not to click", true),
+      check.checkFamilyAlertedOnce(last, "+60198887777"),
+      check.checkMentions(last.reply, /(dah|sudah|telah)\s+(beritahu|bagitahu|maklumkan|hantar)/i, "tells them their family has been told"),
+      check.checkNotMentions(
+        last.reply,
+        /(nak saya beritahu|patut saya beritahu|boleh saya beritahu|shall i tell|should i tell)/i,
+        "doesn't ask whether to tell the family",
+      ),
+    ],
+    judgeFocus: "The family was alerted automatically. The scam warning must say in one short sentence that their family has been told — no asking permission, and without making the user feel watched or blamed.",
   },
   {
     id: "already-shared-ms",
@@ -128,7 +151,7 @@ export const SCENARIOS: Scenario[] = [
       check.checkScamHeader(last.reply, true),
       check.checkMentions(last.reply, /(don't|do not|never)\s+(click|pay|tap|open)/i, "says not to click or pay", true),
     ],
-    judgeFocus: "Scam format in English: 🚨 Be careful line, what looks suspicious, what not to do, how to check (official PosLaju website or number typed in yourself), offer to tell family.",
+    judgeFocus: "Scam format in English: 🚨 Be careful line, what looks suspicious, what not to do, how to check (official PosLaju website or number typed in yourself). No family number is saved, so offer to save one.",
   },
   {
     id: "family-news-ms",

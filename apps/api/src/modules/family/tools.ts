@@ -28,13 +28,21 @@ export function createFamilyTools(family: FamilyService): ToolSet {
     notify_family: defineTool({
       name: "notify_family",
       description:
-        "Alert the user's registered family members that the user received a likely scam. " +
-        "Call this after a HIGH-risk verdict, once the user agrees.",
+        "Alert the user's registered family members. investigate_message already alerts them by itself on a HIGH-risk verdict, " +
+        "so call this only when the user asks you to tell their family, or with alreadyShared true when the user already " +
+        "clicked a link, paid, or shared a password, PIN, OTP or TAC.",
       input: z.object({
         summary: z.string().describe("One line on what the scam was, e.g. 'fake Maybank account-blocked SMS'"),
+        alreadyShared: z
+          .boolean()
+          .optional()
+          .describe("True when the user already clicked, paid or shared details — sends an urgent call-now alert"),
       }),
-      run: async ({ summary }, ctx) => {
-        const { delivered, total } = await family.notify(ctx.elder, summary, ctx.messenger);
+      run: async ({ summary, alreadyShared = false }, ctx) => {
+        if (!alreadyShared && family.alertedRecently(ctx.elder.id)) {
+          return "Their family was already alerted about this a few minutes ago, so no second alert was sent. Tell the user their family already knows.";
+        }
+        const { delivered, total } = await family.notify(ctx.elder, summary, ctx.messenger, { urgent: alreadyShared });
         if (total === 0) return "No family number saved yet — ask the user for one, then call register_family.";
         if (delivered === 0) {
           return "The alert could not be delivered right now. Tell the user honestly and suggest they call their family directly.";

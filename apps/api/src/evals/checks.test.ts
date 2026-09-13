@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BLAME_WORDS,
+  checkFamilyAlertedOnce,
   checkLanguage,
   checkMentions,
   checkNotMentions,
@@ -43,12 +44,20 @@ describe("eval checks", () => {
 
   it.each([
     ["Hubungi anak awak di nombor lama dulu.", true],
+    ["Sebaiknya, cari nombor telefon lama anak awak dan hubungi mereka.", true],
     ["Hubungi anak awak menggunakan nombor yang telah disimpan, bukan nombor baru ini.", true],
     ["Sebaiknya, hubungi anak awak melalui nombor yang awak sudah simpan.", true],
     ["Call your son on the old number first.", true],
     ["Balas mesej tu dan tanya dia betul ke tak.", false],
   ])("old-number check on %j → pass=%s", (reply, pass) => {
     expect(checkMentions(reply, OLD_NUMBER_WORDS, "old number").pass).toBe(pass);
+  });
+
+  it("counts family alerts for a turn", () => {
+    const turn = (to: string[]) => ({ user: "", reply: "", tools: [], events: [], sent: to.map((t) => ({ to: t, body: "alert" })) });
+    expect(checkFamilyAlertedOnce(turn(["+60198887777", "whatsapp:+60100000001"]), "+60198887777").pass).toBe(true);
+    expect(checkFamilyAlertedOnce(turn(["+60198887777", "+60198887777"]), "+60198887777").pass).toBe(false);
+    expect(checkFamilyAlertedOnce(turn([]), "+60198887777").pass).toBe(false);
   });
 
   it("flags condescending or presumptuous wording", () => {

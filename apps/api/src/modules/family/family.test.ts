@@ -14,7 +14,7 @@ function setup() {
   const clock = fixedClock();
   const mak = createEldersService({ repo: createEldersRepo(db), clock }).findOrCreateByPhone("whatsapp:+60123456789", "Mak");
   const family = createFamilyService({ repo: createFamilyRepo(db), clock, log: silentLogger });
-  return { mak, family, tools: createFamilyTools(family) };
+  return { mak, family, clock, tools: createFamilyTools(family) };
 }
 
 describe("FamilyService", () => {
@@ -68,6 +68,21 @@ describe("FamilyService", () => {
     expect(family.linkTelegram("not a number", "555003")).toEqual([]);
   });
 
+  it("remembers a delivered alert for 30 minutes", async () => {
+    const { mak, family, clock } = setup();
+    family.register(mak.id, { phone: "0123456789" });
+    expect(family.alertedRecently(mak.id)).toBe(false);
+
+    await family.notify(mak, "x", new CapturingMessenger(false));
+    expect(family.alertedRecently(mak.id)).toBe(false);
+
+    await family.notify(mak, "x", new CapturingMessenger());
+    expect(family.alertedRecently(mak.id)).toBe(true);
+
+    clock.set("2026-09-13T03:31:00.000Z");
+    expect(family.alertedRecently(mak.id)).toBe(false);
+  });
+
   it("reports failed deliveries and the no-family case", async () => {
     const { mak, family } = setup();
     await expect(family.notify(mak, "x", new CapturingMessenger())).resolves.toEqual({ delivered: 0, total: 0 });
@@ -92,6 +107,20 @@ describe("family tools", () => {
     await tools.register_family!.run({ phone: "0123456789", name: "Aisyah" }, ctx);
     await expect(tools.notify_family!.run({ summary: "fake parcel SMS" }, ctx)).resolves.toBe("Alerted 1 of 1 family member(s).");
     expect(messenger.sent).toHaveLength(1);
+  });
+
+  it("notify_family doesn't alert twice, except with an urgent already-shared alert", async () => {
+    const { mak, tools, family } = setup();
+    family.register(mak.id, { phone: "0123456789" });
+    const messenger = new CapturingMessenger();
+    const ctx = testContext({ elder: mak, messenger });
+
+    await tools.notify_family!.run({ summary: "fake Maybank SMS" }, ctx);
+    await expect(tools.notify_family!.run({ summary: "fake Maybank SMS" }, ctx)).resolves.toContain("already alerted");
+    await tools.notify_family!.run({ summary: "fake Maybank SMS", alreadyShared: true }, ctx);
+
+    expect(messenger.sent).toHaveLength(2);
+    expect(messenger.sent[1]!.body).toContain("Please call them now");
   });
 
   it("notify_family is honest when delivery fails", async () => {

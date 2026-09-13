@@ -1,9 +1,10 @@
 import type { Investigation } from "./service.js";
 
+// Plain headings: with an emoji heading the model copied "🔴 LIKELY A SCAM" into replies instead of writing its own warning line.
 const HEADS = {
-  HIGH: "🔴 LIKELY A SCAM",
-  MEDIUM: "🟠 BE CAREFUL — POSSIBLE SCAM",
-  LOW: "🟢 PROBABLY OK, BUT STAY ALERT",
+  HIGH: "VERDICT: HIGH RISK — likely a scam",
+  MEDIUM: "VERDICT: MEDIUM RISK — possibly a scam",
+  LOW: "VERDICT: LOW RISK — probably OK, but stay alert",
 } as const;
 
 /** The tool result the model reads. The model rephrases it in the elder's language. */

@@ -23,7 +23,7 @@ export interface ToolServices {
 
 export function buildTools(s: ToolServices): ToolSet {
   return {
-    ...createProtectTools(s.protect, s.events),
+    ...createProtectTools(s.protect, s.events, s.family),
     ...createFamilyTools(s.family),
     ...createReminderTools(s.reminders),
     ...createUnderstandTools(s.understand),

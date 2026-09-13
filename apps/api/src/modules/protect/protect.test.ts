@@ -7,6 +7,8 @@ import { createEldersService } from "../elders/service.js";
 import { createEventBus } from "../events/bus.js";
 import { createEventsRepo } from "../events/repo.js";
 import { createEventsService } from "../events/service.js";
+import { createFamilyRepo } from "../family/repo.js";
+import { createFamilyService } from "../family/service.js";
 import { createProtectService } from "./service.js";
 import { createProtectTools } from "./tools.js";
 import { renderVerdict } from "./verdict.js";
@@ -52,12 +54,12 @@ describe("ProtectService.investigate", () => {
 });
 
 describe("renderVerdict", () => {
-  it("leads with the verdict and safety advice", () => {
+  it("leads with a plain verdict and safety advice", () => {
     const high = renderVerdict({ risk: "HIGH", reasons: ["Asks for an OTP"], webNote: null });
-    expect(high.startsWith("🔴 LIKELY A SCAM")).toBe(true);
+    expect(high.startsWith("VERDICT: HIGH RISK")).toBe(true);
     expect(high).toContain("• Asks for an OTP");
     expect(high).toContain("Do NOT click any link");
-    expect(renderVerdict({ risk: "LOW", reasons: [], webNote: null }).startsWith("🟢")).toBe(true);
+    expect(renderVerdict({ risk: "LOW", reasons: [], webNote: null }).startsWith("VERDICT: LOW RISK")).toBe(true);
   });
 });
 
@@ -74,25 +76,50 @@ describe("investigate_message tool", () => {
       clock,
       log: silentLogger,
     });
-    const tools = createProtectTools(createProtectService({ search: fakeSearch(), urlReputation: fakeUrlReputation() }), events);
-    return { events, tools, mak: elders.findOrCreateByPhone("whatsapp:+60123456789", "Mak") };
+    const family = createFamilyService({ repo: createFamilyRepo(db), clock, log: silentLogger });
+    const tools = createProtectTools(
+      createProtectService({ search: fakeSearch(), urlReputation: fakeUrlReputation() }),
+      events,
+      family,
+    );
+    return { events, family, tools, mak: elders.findOrCreateByPhone("whatsapp:+60123456789", "Mak") };
   }
+
+  const scamInput = { text: MALAY_BANK_SCAM, urls: ["maybank-verify.xyz"], senderClaim: "Maybank" };
 
   it("records a scam_detected event for the current elder on HIGH", async () => {
     const { events, tools, mak } = setup();
-    const verdict = await tools.investigate_message!.run(
-      { text: MALAY_BANK_SCAM, urls: ["maybank-verify.xyz"], senderClaim: "Maybank" },
-      testContext({ elder: mak }),
-    );
-    expect(verdict.startsWith("🔴")).toBe(true);
+    const verdict = await tools.investigate_message!.run(scamInput, testContext({ elder: mak }));
+    expect(verdict.startsWith("VERDICT: HIGH RISK")).toBe(true);
+    expect(verdict).toContain("no family number is saved yet");
     expect(events.list({ elderId: mak.id })).toMatchObject([
       { type: "scam_detected", severity: "high", detail: { senderClaim: "Maybank", urls: ["maybank-verify.xyz"] } },
     ]);
   });
 
-  it("records nothing for a LOW verdict", async () => {
-    const { events, tools, mak } = setup();
-    await tools.investigate_message!.run({ text: "Jom makan malam" }, testContext({ elder: mak }));
+  it("alerts the saved family once on HIGH, without asking, and tells the model so", async () => {
+    const { family, tools, mak } = setup();
+    family.register(mak.id, { phone: "019-888 7777", name: "Aisyah" });
+    const messenger = new CapturingMessenger();
+    const ctx = testContext({ elder: mak, messenger });
+
+    const first = await tools.investigate_message!.run(scamInput, ctx);
+    expect(first).toContain("ALREADY alerted the user's family (1 of 1)");
+    expect(messenger.sent).toMatchObject([
+      { to: "+60198887777", body: expect.stringContaining("Mak just received a likely scam (a message pretending to be Maybank)") },
+    ]);
+
+    const again = await tools.investigate_message!.run(scamInput, ctx);
+    expect(again).toContain("already alerted about this");
+    expect(messenger.sent).toHaveLength(1);
+  });
+
+  it("records nothing and alerts no one for a LOW verdict", async () => {
+    const { events, family, tools, mak } = setup();
+    family.register(mak.id, { phone: "0198887777" });
+    const messenger = new CapturingMessenger();
+    await tools.investigate_message!.run({ text: "Jom makan malam" }, testContext({ elder: mak, messenger }));
     expect(events.list()).toEqual([]);
+    expect(messenger.sent).toEqual([]);
   });
 });
