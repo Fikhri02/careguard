@@ -56,7 +56,7 @@ call it "the thing that keeps my mum safe and keeps me in the loop," we won. Cen
 
 1. **The elderly communication layer** — every reply is short, warm, jargon-free, and in the
    user's language (English / Bahasa Melayu / Manglish / Chinese / Tamil). *This is the core
-   innovation.* It lives mostly in the system prompt (`src/surfaces/careguard.ts`).
+   innovation.* It lives mostly in the system prompt (`apps/api/src/agent/prompts/careguard.ts`).
 2. **Protect** — forward a suspicious message/screenshot → the agent investigates (scam-language
    patterns + URL reputation + web search) → warns in plain language *with reasons*.
 3. **Notify Family (the differentiator)** — on a high-risk scam, the agent alerts a trusted family
@@ -95,46 +95,43 @@ Two surfaces, one backend, one shared event store.
   (patterns + Safe Browsing + Exa) → warn simply → write a `scam_detected` (**high**) event →
   `notify_family` (WhatsApp) → family approves on the dashboard → agent reassures the elder.
 
-### Data model (in `src/agent/events.ts`, currently in-memory — swap for SQLite/Postgres)
-- `events`: id, elderId, elderName, type (`bill_explained` | `scam_detected` | `high_risk_action`
+### Data model (SQLite — `apps/api/src/infra/migrations/001_init.sql`)
+- `events`: id, elderId, type (`bill_explained` | `scam_detected` | `high_risk_action`
   | `reminder_created`), severity (`low` | `med` | `high`), summary, detail, status
-  (`new` | `approved` | `dismissed` | `resolved`), createdAt. **This is the spine both surfaces share.**
-- `reminders`: elderId, what, when (in `src/agent/careguard/reminders.ts`).
-- To add: `family_users` (Auth0 sub), `elders` (whatsapp_number ↔ family link), `pending_actions`.
+  (`new` | `approved` | `dismissed` | `resolved`), createdAt, resolvedAt, resolvedBy. **This is the spine both surfaces share.**
+- `elders` (keyed by WhatsApp number), `family_members` (`auth0_sub` reserved for Auth0), `reminders`,
+  and `messages` (conversation history).
 
 ---
 
 ## 6. What's already here (TEMPLATE) vs what to BUILD LIVE
 
-### Already scaffolded (use as your template — verified to typecheck & run)
-- `src/agent/agent.ts` — portable OpenAI tool-calling loop (model-agnostic; supports vision).
-- `src/surfaces/careguard.ts` — **the WhatsApp surface + the communication-layer system prompt.**
-- `src/agent/scam/investigate.ts` — scam investigation (patterns + URL + web search → verdict).
-- `src/agent/scam/urlcheck.ts` — Google Safe Browsing + lookalike-domain heuristic (MY banks).
-- `src/agent/scam/family.ts` — `register_family` / `notify_family` (Twilio WhatsApp send).
-- `src/agent/careguard/reminders.ts` — `create_reminder` (the low-risk Act).
-- `src/agent/events.ts` + Events API in `src/surfaces/server.ts` — the dashboard contract:
-  `GET /api/events?status=` · `GET /api/events/:id` · `POST /api/events/:id/approve` ·
-  `POST /api/events/:id/dismiss` · `GET /api/reminders`.
-- `src/agent/exa.ts` — Exa search/answer client.
-- `src/surfaces/cli.ts` — terminal tester (no WhatsApp needed).
+### Already built (foundation — design in `docs/superpowers/specs/2026-09-13-careguard-architecture-design.md`)
+- `apps/api` — one Express process: WhatsApp webhook (`POST /whatsapp`, Twilio-signature checked, replies
+  asynchronously), Events API + live stream (`/api/*`), and a dev simulator (`POST /dev/simulate`).
+- `apps/api/src/agent/prompts/careguard.ts` — **the communication-layer system prompt.**
+- `apps/api/src/modules/protect/` — scam investigation (patterns + URL reputation + web search → verdict).
+- `apps/api/src/modules/family/` — `register_family` / `notify_family`.
+- `apps/api/src/modules/reminders/` — `create_reminder` with an in-process scheduler.
+- `apps/api/src/modules/understand/` — `log_document` (writes `bill_explained` events).
+- `apps/api/src/modules/events/` — the shared event store and the dashboard contract:
+  `GET /api/events?elderId=&status=&severity=&since=` · `GET /api/events/:id` · `POST /api/events/:id/approve` ·
+  `POST /api/events/:id/dismiss` · `GET /api/reminders?elderId=` · `GET /api/elders` · `GET /api/stream` (SSE).
+- `packages/shared` — zod contracts used by the API and the dashboard. `apps/dashboard` — Next.js shell.
+- `npm run cli` — terminal tester running the real CareGuard pipeline (no WhatsApp needed).
 
 ### Build live tomorrow (the "core functionality")
-- [ ] **CopilotKit family dashboard** (`/dashboard`, Next.js): events feed, approve/dismiss buttons,
+- [ ] **CopilotKit family dashboard** (`apps/dashboard`, Next.js): events feed, approve/dismiss buttons,
       and a CopilotKit copilot that answers "what happened this week?" from the events. Calls the
       Events API above. **This is the CopilotKit category-prize surface — prioritise it.**
 - [ ] **Auth0** login on the dashboard + gate `POST /approve` to the linked family member.
 - [ ] **Trigger.dev** — make `create_reminder` schedule a real WhatsApp nudge at the due time
-      (currently in-memory only).
-- [ ] **Wire approval → action:** `POST /api/events/:id/approve` should trigger the agent to send
-      the elder a reassuring WhatsApp (currently a TODO in `server.ts`).
-- [ ] **Refine the communication layer** — tune the prompt in `careguard.ts` until BM/Manglish
+      (currently an in-process scheduler behind the `Scheduler` port).
+- [x] **Wire approval → action** (foundation): approving a scam event sends the elder a reassurance —
+      tune its wording in `apps/api/src/modules/events/service.ts`.
+- [ ] **Refine the communication layer** — tune the prompt in `apps/api/src/agent/prompts/careguard.ts` until BM/Manglish
       explanations are short, correct, and warm on real bills and real scam screenshots.
 - [ ] **Deploy** backend + dashboard to Cloud Run.
-
-### Ignore / delete (leftovers from earlier idea exploration — not part of CareGuard)
-- `src/agent/iphone/*`, `src/surfaces/whatsapp.ts`, `src/surfaces/scamguard.ts`,
-  `src/surfaces/slack.ts` — safe to remove; kept only as reference.
 
 ---
 
@@ -142,12 +139,12 @@ Two surfaces, one backend, one shared event store.
 
 **Lock the Events API shape first (H0). Then build in parallel.**
 
-- **Track A — WhatsApp + agent** (`careguard.ts`, scam tools, reminders): get forward→verdict→event
-  working end to end; refine the communication layer.
-- **Track B — CopilotKit dashboard** (new `/dashboard`): shell + Auth0 + events feed + approve +
+- **Track A — WhatsApp + agent** (`apps/api/src/agent`, `modules/protect`, `modules/reminders`): get
+  forward→verdict→event working end to end; refine the communication layer.
+- **Track B — CopilotKit dashboard** (`apps/dashboard`): Auth0 + events feed + approve + live stream +
   copilot Q&A. *Highest-value new build.*
-- **Track C — backend + deploy** (`server.ts`, `events.ts`, Trigger.dev): keep the Events API solid,
-  wire Trigger.dev, deploy both to Cloud Run.
+- **Track C — backend + deploy** (`apps/api/src/http`, `modules/events`, Trigger.dev): keep the Events API
+  solid, wire Trigger.dev, deploy both to Cloud Run.
 
 **Protect this three-part loop above all else:** scam on WhatsApp → HIGH event on the dashboard →
 family approval flows back to the elder. That loop *is* the demo.
@@ -191,26 +188,48 @@ anyone to click a link or share an OTP; when unsure it says "call your bank on t
 
 ```bash
 npm install
-cp .env.example .env      # fill in keys (see below)
+cp .env.example .env      # add keys as you get them — the API boots without any
 
-npm run cli               # test the agent + scam investigation in the terminal (no WhatsApp needed)
-npm run careguard         # the WhatsApp surface (needs Twilio + a webhook, e.g. ngrok)
-npm run server            # Events API + demo widget at http://localhost:8787/api/events
-npm run typecheck         # tsc --noEmit
+npm run dev:api           # API on http://localhost:8787 — WhatsApp webhook, Events API, /dev/simulate
+npm run dev:dashboard     # dashboard shell on http://localhost:3000
+npm run cli               # chat with the real CareGuard pipeline in the terminal (no WhatsApp needed)
+npm test                  # vitest (api + shared)
+npm run typecheck         # every workspace
 ```
 
-### Environment variables (`.env`)
+Missing keys switch on fallbacks, listed at startup and on `GET /health`: without OpenAI the elder gets
+the fallback reply; without Twilio outbound messages are logged; without Exa / Safe Browsing only offline
+checks run.
+
+Try a turn without WhatsApp:
+```bash
+curl -s -X POST localhost:8787/dev/simulate -H 'content-type: application/json' \
+  -d '{"phone":"+60123456789","text":"Akaun Maybank anda disekat. Sahkan segera di maybank-verify.xyz"}'
+```
+
+### Environment variables (`.env` at the repo root — see `.env.example`)
 - `OPENAI_API_KEY` (+ optional `MODEL`, default `gpt-4o-mini`) — unlock credits by checking in at the event.
-- `EXA_API_KEY` — dashboard.exa.ai.
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM` — WhatsApp sandbox (join from
   two phones: the "elder" and the "family").
-- `GOOGLE_SAFE_BROWSING_KEY` — optional; makes URL checks genuinely live.
+- `PUBLIC_URL` — the public origin Twilio calls (ngrok or Cloud Run); enables signature checks.
+- `EXA_API_KEY`, `GOOGLE_SAFE_BROWSING_KEY` — optional; make the investigation live.
+- `SEED_DEMO=true` — load demo elder "Mak" and two example events into an empty database.
 - (build live) Auth0 domain + client ID; Trigger.dev key.
 
 ### WhatsApp setup
 Twilio console → Messaging → Try it out → **WhatsApp sandbox**. Join with the code from both phones.
-Run `npm run careguard`, expose it (`npx ngrok http 8788`), set the sandbox "when a message comes in"
-webhook to `https://<host>/whatsapp`.
+Run `npm run dev:api`, expose it (`npx ngrok http 8787`), set `PUBLIC_URL` to the ngrok origin, and set
+the sandbox "when a message comes in" webhook to `https://<host>/whatsapp`.
+
+### Deploy the API (Cloud Run)
+```bash
+gcloud run deploy careguard-api --source . --no-cpu-throttling --max-instances=1 --allow-unauthenticated \
+  --set-env-vars NODE_ENV=production,PUBLIC_URL=https://<service-url>,SEED_DEMO=true,OPENAI_API_KEY=...,TWILIO_ACCOUNT_SID=...,TWILIO_AUTH_TOKEN=...,TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
+```
+`PUBLIC_URL` is required in production. Cloud Run service URLs are predictable
+(`https://<service>-<project-number>.<region>.run.app`), so it can be set on the first deploy.
+`--no-cpu-throttling` keeps turns running after the webhook responds; `--max-instances=1` keeps SQLite
+single-writer. The database is lost when the container restarts — `SEED_DEMO=true` restores the demo data.
 
 ---
 

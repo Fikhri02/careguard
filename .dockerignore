@@ -1,0 +1,10 @@
+**/node_modules
+**/.next
+**/data
+**/*.db
+**/.env
+**/.env.local
+.git
+docs
+apps/dashboard/*
+!apps/dashboard/package.json

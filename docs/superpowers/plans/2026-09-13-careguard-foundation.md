@@ -5690,13 +5690,13 @@ Expected: a JSON log line containing `Missing required production settings: OPEN
 Run:
 ```bash
 docker run -d --rm -p 8080:8080 -e NODE_ENV=development -e SEED_DEMO=true --name careguard-smoke careguard-api
-curl -s --retry 15 --retry-connrefused --retry-delay 1 localhost:8080/health
+curl -s --retry 15 --retry-all-errors --retry-delay 1 localhost:8080/health   # not --retry-connrefused: Docker Desktop's port proxy accepts early connections and returns an empty reply
 curl -s localhost:8080/api/events
 docker rm -f careguard-smoke
 ```
 Expected: `/health` returns `"ok":true` with five fallbacks; `/api/events` returns the two seeded events.
 
-If the container fails with `Cannot find module`, a dependency was installed under `apps/api/node_modules` instead of being hoisted: add `COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules` after the root `node_modules` copy (create the directory in the deps stage with `RUN mkdir -p apps/api/node_modules` before `npm ci`) and rebuild.
+If the container fails with `Cannot find module` or `z.url is not a function`, a dependency was installed under a workspace's own `node_modules` instead of being hoisted. **This does happen:** `openai@4` depends on `zod@3`, which npm hoists to the root, so `zod@4` lands in `apps/api/node_modules` and `packages/shared/node_modules`. Copy both from the deps stage after the source copies (`COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules`, same for `packages/shared`), create the directories in the deps stage with `RUN mkdir -p apps/api/node_modules packages/shared/node_modules` before `npm ci`, and rebuild.
 
 - [ ] **Step 4: Add CI**
 

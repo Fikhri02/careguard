@@ -11,7 +11,7 @@ one backend and a shared `events` store.
 
 ## Priorities (in order)
 1. The **elderly communication layer** (short, warm, jargon-free, BM/English/Manglish) — mostly the
-   system prompt in `src/surfaces/careguard.ts`. This is the core innovation.
+   system prompt in `apps/api/src/agent/prompts/careguard.ts`. This is the core innovation.
 2. **Protect** — `investigate_message` (patterns + URL reputation + Exa) → plain-language warning.
 3. **Notify Family** — the differentiator and the demo's emotional climax.
 4. **Understand** — explain a bill photo → offer a reminder.
@@ -19,10 +19,11 @@ one backend and a shared `events` store.
    answers "what happened this week?".
 
 ## Build live (this repo is a TEMPLATE — eligibility requires core built during the event)
-- The CopilotKit dashboard (`/dashboard`, Next.js) against the Events API in `src/surfaces/server.ts`.
-- Auth0 login + gate `/api/events/:id/approve`.
-- Trigger.dev: make `create_reminder` schedule a real WhatsApp nudge.
-- Wire approval → agent reassures the elder (TODO in `server.ts`).
+- The CopilotKit dashboard in `apps/dashboard` (Next.js) against the Events API
+  (`apps/api/src/modules/events/routes.ts`; live updates on `GET /api/stream`).
+- Auth0 login + implement `apps/api/src/http/require-family.ts` (gates `/api/events/:id/approve`).
+- Trigger.dev: a `Scheduler` adapter so `create_reminder` nudges survive restarts.
+- Tune the approval reassurance (`apps/api/src/modules/events/service.ts`) and the prompt.
 - Deploy backend + dashboard to Cloud Run.
 
 ## The loop to protect above all
@@ -34,8 +35,16 @@ the demo.** If time is short, cut everything else before this loop or the rehear
   engine, no voice, no appointments).
 - Never tell a user to click a link, share an OTP/TAC/password, or make an irreversible financial move
   without family approval. CareGuard **flags and advises**, never guarantees.
-- Verify with `npm run typecheck` and `npm run cli` as you go.
+- Verify with `npm test`, `npm run typecheck` and `npm run cli` as you go.
+
+## Layout
+- `apps/api` — the one backend process: WhatsApp channel, agent, modules, Events API. Modules are
+  `routes.ts`/`tools.ts` → `service.ts` → `repo.ts`; a module talks to another only through its service.
+  External services sit behind `src/ports/`; tools get per-turn data only via `ToolContext`.
+- `apps/dashboard` — Next.js family dashboard (shell so far).
+- `packages/shared` — zod contracts shared by both apps.
+- Design: `docs/superpowers/specs/2026-09-13-careguard-architecture-design.md` (§13 lists changes made while planning).
 
 ## Run
-`npm run cli` (test agent, no WhatsApp) · `npm run careguard` (WhatsApp surface) ·
-`npm run server` (Events API + widget). Keys in `.env` — see README §10.
+`npm run dev:api` (API, :8787) · `npm run dev:dashboard` (:3000) · `npm run cli` (test the agent, no WhatsApp) ·
+`npm test` · `npm run typecheck`. Keys in `.env` — see `.env.example`; the API boots without any.
