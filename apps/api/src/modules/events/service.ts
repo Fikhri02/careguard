@@ -1,5 +1,5 @@
 import type { CareEvent, EventType, ListEventsQuery, Severity } from "@careguard/shared";
-import { ConflictError, NotFoundError } from "../../errors.js";
+import { ConflictError, NotFoundError, ValidationError } from "../../errors.js";
 import { newId } from "../../infra/ids.js";
 import type { Clock } from "../../ports/clock.js";
 import type { Logger } from "../../ports/logger.js";
@@ -22,7 +22,11 @@ export interface EventsService {
   get(id: string): CareEvent;
   approve(id: string, by?: string | null): Promise<CareEvent>;
   dismiss(id: string, by?: string | null): CareEvent;
+  /** A message the family writes (usually through the dashboard copilot), sent to the elder. Resolves to whether it was delivered. */
+  messageElder(elderId: string, text: string): Promise<boolean>;
 }
+
+const MAX_FAMILY_MESSAGE = 1000;
 
 /** Sent to the elder when family approves a high-risk event. Wording is tuned on event day. */
 export const REASSURANCE =
@@ -87,5 +91,14 @@ export function createEventsService({ repo, bus, messenger, elders, clock, log }
       return approved;
     },
     dismiss: (id, by = null) => decide(id, "dismissed", by),
+    async messageElder(elderId, text) {
+      const body = text.trim();
+      if (!body) throw new ValidationError("The message is empty.");
+      if (body.length > MAX_FAMILY_MESSAGE) throw new ValidationError(`Keep the message under ${MAX_FAMILY_MESSAGE} characters.`);
+      const elder = elders.get(elderId);
+      const delivered = await messenger.send({ to: elder.phone, body: `💙 Daripada keluarga awak:\n${body}` });
+      if (!delivered) log.warn("family message not delivered", { elderId });
+      return delivered;
+    },
   };
 }

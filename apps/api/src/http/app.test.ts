@@ -65,6 +65,19 @@ describe("HTTP app", () => {
     expect(res.body.error.code).toBe("validation_error");
   });
 
+  it("sends a family message to the elder, and rejects empty text or an unknown elder", async () => {
+    const { app, messenger, mak } = setup();
+
+    const sent = await request(app).post(`/api/elders/${mak.id}/messages`).send({ text: " Mak, saya call malam ni ya. " });
+    expect(sent.status).toBe(200);
+    expect(sent.body).toEqual({ delivered: true });
+    expect(messenger.sent).toEqual([{ to: mak.phone, body: "💙 Daripada keluarga awak:\nMak, saya call malam ni ya." }]);
+
+    expect((await request(app).post(`/api/elders/${mak.id}/messages`).send({ text: "  " })).status).toBe(400);
+    expect((await request(app).post("/api/elders/eld_missing/messages").send({ text: "Hai" })).status).toBe(404);
+    expect(messenger.sent).toHaveLength(1);
+  });
+
   it("approves once, reassures the elder, and returns 409 on repeat", async () => {
     const { app, services, messenger, mak } = setup();
     const event = services.events.record(scam(mak.id));

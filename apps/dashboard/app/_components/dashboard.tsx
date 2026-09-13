@@ -1,10 +1,10 @@
 "use client";
 
 import type { CareEvent, Elder, StreamMessage } from "@careguard/shared";
-import { useCopilotReadable } from "@copilotkit/react-core";
+import { useCopilotAction, useCopilotReadable } from "@copilotkit/react-core";
 import { CopilotPopup } from "@copilotkit/react-ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { decide, DecisionError, fetchElders, type Decision } from "../../lib/client";
+import { decide, DecisionError, fetchElders, sendToElder, type Decision } from "../../lib/client";
 import { elderLabel, EVENT_LABEL, isExample, needsAttention, reasonsOf, upsertEvent } from "../../lib/format";
 import { AttentionCard } from "./attention-card";
 import { Timeline } from "./timeline";
@@ -17,7 +17,11 @@ const COPILOT_INSTRUCTIONS =
   "Answer only from the CareGuard activity you are given, and never invent events. " +
   "Be warm and brief: a one-line headline, then a few short bullets with times in Malaysia time (UTC+8). " +
   "Put anything that still needs the family's decision first. Say when an item is example demo data. " +
-  "If nothing matches the question, say so plainly.";
+  "If nothing matches the question, say so plainly. " +
+  "You can also act, but only when the family member clearly asks you to: approve or dismiss an alert that needs their decision " +
+  "(decideAlert, using the alert's id from the activity; never an example item unless they insist), or send their relative a message (sendMessageToElder). " +
+  "Write messages to the relative as the family member speaking — short, warm, simple, and in the relative's language (usually Bahasa Melayu). " +
+  "After acting, say exactly what you did in one line.";
 
 const CONNECTION_LABEL: Record<Connection, string> = {
   connecting: "Connecting…",
@@ -83,7 +87,7 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
         const who = elderLabel(elders, event.elderId);
         setNotice({
           tone: "ok",
-          text: decision === "approve" ? `Approved — ${who} is getting a reassuring WhatsApp.` : "Dismissed — no message was sent.",
+          text: decision === "approve" ? `Approved — ${who} is getting a reassuring message.` : "Dismissed — no message was sent.",
         });
       } catch (err) {
         if (err instanceof DecisionError && err.code === "conflict") {
@@ -113,6 +117,7 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
   const copilotActivity = useMemo(
     () =>
       events.map((e) => ({
+        id: e.id,
         when: e.createdAt,
         elder: elderLabel(elders, e.elderId),
         what: EVENT_LABEL[e.type],
@@ -130,6 +135,65 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
     value: copilotActivity,
   });
   useCopilotReadable({ description: "The elderly relatives CareGuard looks after", value: watching });
+
+  // The copilot acts through the same paths as the buttons, so the dashboard updates and notices the same way.
+  useCopilotAction(
+    {
+      name: "decideAlert",
+      description:
+        "Approve or dismiss a CareGuard alert that needs the family's decision. Approving sends the relative a reassuring message. " +
+        "Only call this when the family member asks you to.",
+      parameters: [
+        { name: "eventId", type: "string", description: "The alert's id from the CareGuard activity", required: true },
+        { name: "decision", type: "string", enum: ["approve", "dismiss"], description: "approve or dismiss", required: true },
+      ],
+      handler: async ({ eventId, decision }) => {
+        const event = events.find((e) => e.id === eventId);
+        if (!event) return "There is no alert with that id.";
+        if (!needsAttention(event)) return `That alert was already ${event.status}.`;
+        const choice: Decision = decision === "dismiss" ? "dismiss" : "approve";
+        await onDecide(event, choice);
+        const who = elderLabel(elders, event.elderId);
+        return choice === "approve" ? `Approved — ${who} is getting a reassuring message.` : "Dismissed — no message was sent.";
+      },
+    },
+    [events, elders, onDecide],
+  );
+
+  useCopilotAction(
+    {
+      name: "sendMessageToElder",
+      description:
+        "Send a short message from the family to their elderly relative, on the chat app CareGuard uses with them. " +
+        "Only call this when the family member asks you to tell their relative something.",
+      parameters: [
+        { name: "elderName", type: "string", description: "Which relative, exactly as listed among the relatives CareGuard looks after", required: true },
+        { name: "message", type: "string", description: "The exact message to send, written as the family member speaking", required: true },
+      ],
+      handler: async ({ elderName, message }) => {
+        const list = [...elders.values()];
+        const wanted = elderName.trim().toLowerCase();
+        const elder = list.find((e) => (e.name ?? "").trim().toLowerCase() === wanted) ?? (list.length === 1 ? list[0] : undefined);
+        if (!elder) return `I couldn't tell which relative "${elderName}" is. Ask the family member to pick one of: ${watching.join(", ")}.`;
+        const who = elderLabel(elders, elder.id);
+        try {
+          const delivered = await sendToElder(elder.id, message);
+          setNotice(
+            delivered
+              ? { tone: "ok", text: `Sent to ${who}: “${message}”` }
+              : { tone: "error", text: `Couldn't deliver the message to ${who} right now.` },
+          );
+          return delivered ? `Sent to ${who}: "${message}"` : `The message couldn't be delivered to ${who} right now.`;
+        } catch (err) {
+          const text = err instanceof Error ? err.message : "Something went wrong.";
+          setNotice({ tone: "error", text });
+          return `Not sent: ${text}`;
+        }
+      },
+    },
+    [elders, watching],
+  );
+
   const firstElder = watching[0] ?? "your family";
 
   return (
@@ -206,7 +270,7 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
         clickOutsideToClose={false}
         labels={{
           title: "Ask CareGuard",
-          initial: `Ask me anything about ${firstElder}’s week — for example, “What happened with ${firstElder} this week?”`,
+          initial: `Ask me about ${firstElder}’s week, or ask me to act — for example, “Approve the scam alert” or “Tell ${firstElder} I’ll call tonight.”`,
           placeholder: `Ask about ${firstElder}…`,
         }}
       />

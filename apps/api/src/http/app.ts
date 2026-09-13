@@ -33,7 +33,7 @@ export function createApp({ config, log, services, checkDb, whatsappWebhook, sim
   api.use(cors(config.dashboardOrigin));
   api.use(express.json({ limit: "1mb" }));
   api.use(requireFamily);
-  api.use("/elders", createEldersRouter(services.elders));
+  api.use("/elders", createEldersRouter(services.elders, services.events));
   api.use("/events", createEventsRouter(services.events));
   api.use("/reminders", createRemindersRouter(services.reminders));
   api.get("/stream", createStreamHandler(services.bus));
