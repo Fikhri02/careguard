@@ -1,14 +1,23 @@
 "use client";
 
 import type { CareEvent, Elder, StreamMessage } from "@careguard/shared";
+import { useCopilotReadable } from "@copilotkit/react-core";
+import { CopilotPopup } from "@copilotkit/react-ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { decide, DecisionError, fetchElders, type Decision } from "../../lib/client";
-import { elderLabel, needsAttention, upsertEvent } from "../../lib/format";
+import { elderLabel, EVENT_LABEL, isExample, needsAttention, reasonsOf, upsertEvent } from "../../lib/format";
 import { AttentionCard } from "./attention-card";
 import { Timeline } from "./timeline";
 
 type Connection = "connecting" | "live" | "reconnecting";
 type Notice = { tone: "ok" | "error"; text: string };
+
+const COPILOT_INSTRUCTIONS =
+  "You are CareGuard's family assistant. You help a family member understand what CareGuard did for their elderly relative. " +
+  "Answer only from the CareGuard activity you are given, and never invent events. " +
+  "Be warm and brief: a one-line headline, then a few short bullets with times in Malaysia time (UTC+8). " +
+  "Put anything that still needs the family's decision first. Say when an item is example demo data. " +
+  "If nothing matches the question, say so plainly.";
 
 const CONNECTION_LABEL: Record<Connection, string> = {
   connecting: "Connecting…",
@@ -100,6 +109,29 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
   );
   const watching = [...elders.values()].map((e) => e.name ?? e.phone.replace(/^whatsapp:/, ""));
 
+  // What the copilot may read: the same activity the family sees, in plain terms.
+  const copilotActivity = useMemo(
+    () =>
+      events.map((e) => ({
+        when: e.createdAt,
+        elder: elderLabel(elders, e.elderId),
+        what: EVENT_LABEL[e.type],
+        severity: e.severity,
+        status: e.status,
+        needsFamilyDecision: needsAttention(e),
+        summary: e.summary,
+        reasons: reasonsOf(e),
+        exampleDemoData: isExample(e),
+      })),
+    [events, elders],
+  );
+  useCopilotReadable({
+    description: "CareGuard activity for the family, newest first. `when` is ISO-8601 UTC; the family lives in Malaysia (UTC+8).",
+    value: copilotActivity,
+  });
+  useCopilotReadable({ description: "The elderly relatives CareGuard looks after", value: watching });
+  const firstElder = watching[0] ?? "your family";
+
   return (
     <div className="shell">
       <header className="topbar">
@@ -168,6 +200,16 @@ export function Dashboard({ initialEvents, initialElders }: { initialEvents: Car
           </section>
         </div>
       </main>
+
+      <CopilotPopup
+        instructions={COPILOT_INSTRUCTIONS}
+        clickOutsideToClose={false}
+        labels={{
+          title: "Ask CareGuard",
+          initial: `Ask me anything about ${firstElder}’s week — for example, “What happened with ${firstElder} this week?”`,
+          placeholder: `Ask about ${firstElder}…`,
+        }}
+      />
     </div>
   );
 }

@@ -44,6 +44,18 @@
   }
 }
 
+/* CopilotKit chat, mapped onto CareGuard's tokens so it follows both themes. */
+:root {
+  --copilot-kit-primary-color: var(--accent);
+  --copilot-kit-contrast-color: var(--on-accent);
+  --copilot-kit-background-color: var(--surface);
+  --copilot-kit-input-background-color: var(--ground);
+  --copilot-kit-secondary-color: var(--surface);
+  --copilot-kit-secondary-contrast-color: var(--ink);
+  --copilot-kit-separator-color: var(--line);
+  --copilot-kit-muted-color: var(--muted);
+}
+
 * {
   box-sizing: border-box;
 }
