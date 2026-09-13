@@ -1,35 +1,26 @@
-import type { CareEvent } from "@careguard/shared";
-import { API_URL, listEvents } from "../lib/api";
+import { API_URL, listElders, listEvents } from "../lib/api";
+import { Dashboard } from "./_components/dashboard";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  let events: CareEvent[] = [];
-  let error: string | null = null;
   try {
-    events = await listEvents();
+    const [events, elders] = await Promise.all([listEvents(), listElders()]);
+    return <Dashboard initialEvents={events} initialElders={elders} />;
   } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
+    const reason = err instanceof Error ? err.message : String(err);
+    return (
+      <main className="shell">
+        <section className="offline">
+          <h1>CareGuard can’t reach the API</h1>
+          <p>
+            Start it with <code>npm run dev:api</code>, then reload this page.
+          </p>
+          <p>
+            Tried <code>{API_URL}</code>: {reason}
+          </p>
+        </section>
+      </main>
+    );
   }
-
-  return (
-    <main>
-      <h1>CareGuard — family dashboard (shell)</h1>
-      {error ? (
-        <p>
-          Could not reach the API at {API_URL}: {error}
-        </p>
-      ) : events.length === 0 ? (
-        <p>No events yet.</p>
-      ) : (
-        <ul>
-          {events.map((event) => (
-            <li key={event.id}>
-              [{event.severity}] {event.type} — {event.summary} ({event.status})
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
-  );
 }
