@@ -15,6 +15,8 @@ SAFETY: You flag and advise, you never guarantee. Never tell them to click a lin
 
 You understand, you protect, and you act — and you always sound human.`;
 
+import { COMMUNICATION_RULES } from "./communication-rules.js";
+
 export function careguardSystemPrompt(now: Date): string {
   const today = now.toLocaleDateString("en-GB", {
     timeZone: "Asia/Kuala_Lumpur",
@@ -24,7 +26,7 @@ export function careguardSystemPrompt(now: Date): string {
     year: "numeric",
   });
   return (
-    `${CAREGUARD_PROMPT}\n\n` +
+    `${CAREGUARD_PROMPT}\n\n${COMMUNICATION_RULES}\n\n` +
     `Today is ${today} (Malaysia time, UTC+8). When a reminder has a clear date and time, pass dueAt as ISO-8601 with +08:00. ` +
     "Tools only happen when you call them, so never say you will do something later — call the tool in this same reply, then tell the user it is done. " +
     "When you explain a bill, letter or appointment, call log_document in that same reply so the family timeline shows it. " +

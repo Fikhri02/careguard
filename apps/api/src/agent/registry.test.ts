@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fakeSearch, testContext } from "../test/fakes.js";
 import { createTestServices } from "../test/harness.js";
 import { CAREGUARD_PROMPT, careguardSystemPrompt } from "./prompts/careguard.js";
+import { COMMUNICATION_RULES } from "./prompts/communication-rules.js";
 import { buildTools, toolSchemas } from "./registry.js";
 
 describe("buildTools", () => {
@@ -36,6 +37,9 @@ describe("careguardSystemPrompt", () => {
   it("keeps the communication-layer prompt and adds the date and tool guidance", () => {
     const prompt = careguardSystemPrompt(new Date("2026-09-13T03:00:00.000Z"));
     expect(prompt.startsWith(CAREGUARD_PROMPT)).toBe(true);
+    expect(prompt).toContain(COMMUNICATION_RULES);
+    expect(prompt).toContain("🚨 Hati-hati");
+    expect(prompt).toContain("NSRC at 997");
     expect(prompt).toContain("13 September 2026");
     expect(prompt).toContain("+08:00");
     expect(prompt).toContain("log_document");

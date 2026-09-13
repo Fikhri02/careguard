@@ -8,6 +8,7 @@
     "dev:api": "npm run dev -w @careguard/api",
     "dev:dashboard": "npm run dev -w @careguard/dashboard",
     "cli": "npm run cli -w @careguard/api",
+    "eval": "npm run eval -w @careguard/api --",
     "test": "vitest run",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build:dashboard": "npm run build -w @careguard/dashboard"
