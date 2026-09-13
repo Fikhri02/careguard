@@ -344,3 +344,33 @@ Vitest across workspaces; supertest for HTTP. No test calls a live external serv
 ### Out of scope
 Voice, appointment system, configurable risk engine, multi-tenant organisations, non-WhatsApp elder
 channels, message media storage.
+
+## 13. Changes made while planning (2026-09-13)
+
+Verified against the installed toolchain before the implementation plan was written. Where this
+section and §1–§12 disagree, this section wins.
+
+1. **`better-sqlite3` is pinned to `^12`.** 13.0.3's darwin-arm64 prebuild segfaults on Node 22.13.1,
+   even outside Vitest. 12.11.1 passes on macOS arm64, inside Vitest workers, and in `node:22-slim`.
+2. **Inbound messages are persisted at the start of the queued turn, not before enqueueing** (changes
+   §3 step 1 and §10). Persisting at webhook time would give a second message a row id lower than the
+   first turn's replies and scramble history order. De-duplication on `MessageSid` still holds because
+   it runs inside the per-elder queue. Trade-off: a crash between the `200` ack and the start of the
+   turn loses that one message.
+3. **The Messenger is passed per turn in `ToolContext`** (changes §6), and `family.notify(elder,
+   summary, messenger)` receives it per call (changes §7). This is what lets `/dev/simulate` and the
+   CLI capture family alerts instead of sending them. `events` and `reminders` keep the process-wide
+   Messenger, because approvals and nudges happen outside a turn.
+4. **The lookalike-brand heuristic matches whole words** (`\bpos\b`) with aliases such as
+   "public bank", and bare domains get `http://` before parsing. The old substring match treated
+   "deposit" as a Pos Malaysia mention.
+5. **The appended prompt line also instructs the model to call `log_document`** after explaining a
+   document (§6); without it the tool is never used.
+6. **Tool schemas are generated with `z.toJSONSchema`** (its `$schema` key stripped).
+   `create_reminder.dueAt` is a plain string validated in the reminders service, because
+   `z.iso.datetime` expands to a very long regex in JSON Schema.
+7. **Test doubles:** `CapturingMessenger` is both the simulate/CLI messenger and the test fake. The P2
+   regression test exists at the runner level and at the pipeline level.
+8. **Phone helpers live in `src/phone.ts`.** Elders are keyed by Twilio's `whatsapp:+60…` form; family
+   numbers are stored as `+60…`, normalised from local formats such as `012-345 6789`.
+9. **Composition lives in `src/services.ts` and `src/runtime.ts`**, shared by `main.ts`, the CLI and tests.
