@@ -49,6 +49,25 @@ describe("FamilyService", () => {
     expect(messenger.sent[0]!.body).toContain("Mak just received a likely scam (fake Maybank SMS)");
   });
 
+  it("links a family member's Telegram chat by phone and alerts them there", async () => {
+    const { mak, family } = setup();
+    family.register(mak.id, { phone: "012-345 6789", name: "Aisyah" });
+
+    // Telegram shares contacts as digits without a plus sign.
+    const linked = family.linkTelegram("60123456789", "555001");
+    expect(linked).toMatchObject([{ name: "Aisyah", phone: "+60123456789", telegramChatId: "555001" }]);
+
+    const messenger = new CapturingMessenger();
+    await expect(family.notify(mak, "fake Maybank SMS", messenger)).resolves.toEqual({ delivered: 1, total: 1 });
+    expect(messenger.sent.map((m) => m.to)).toEqual(["telegram:555001"]);
+  });
+
+  it("links nobody when the shared number was never registered", () => {
+    const { family } = setup();
+    expect(family.linkTelegram("0199999999", "555002")).toEqual([]);
+    expect(family.linkTelegram("not a number", "555003")).toEqual([]);
+  });
+
   it("reports failed deliveries and the no-family case", async () => {
     const { mak, family } = setup();
     await expect(family.notify(mak, "x", new CapturingMessenger())).resolves.toEqual({ delivered: 0, total: 0 });

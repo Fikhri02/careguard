@@ -5,6 +5,10 @@ import { createInProcessScheduler } from "./adapters/in-process-scheduler.js";
 import { nullSearch } from "./adapters/null-search.js";
 import { offlineUrlReputation } from "./adapters/offline-url-reputation.js";
 import { createOpenAiLlm, disabledLlm } from "./adapters/openai-llm.js";
+import { createRoutingMessenger } from "./adapters/routing-messenger.js";
+import { createTelegramMessenger } from "./adapters/telegram-messenger.js";
+import { createTelegramClient } from "./channels/telegram/client.js";
+import { createTelegramPoller, type TelegramPoller } from "./channels/telegram/poller.js";
 import { createSafeBrowsing } from "./adapters/safe-browsing.js";
 import { systemClock } from "./adapters/system-clock.js";
 import { createTwilioMediaFetcher, noMedia } from "./adapters/twilio-media.js";
@@ -27,6 +31,8 @@ export interface Runtime {
   services: Services;
   pipeline: InboundPipeline;
   app: Express;
+  /** Present when TELEGRAM_BOT_TOKEN is set; main.ts starts it. */
+  telegram?: TelegramPoller;
   close(): void;
 }
 
@@ -34,7 +40,13 @@ export interface Runtime {
 export function createRuntime(config: Config, log: Logger): Runtime {
   const db = openDb(config.databasePath);
   const clock = systemClock;
-  const messenger = config.twilio ? createTwilioMessenger(config.twilio, log) : createConsoleMessenger(log);
+  const whatsappMessenger = config.twilio ? createTwilioMessenger(config.twilio, log) : createConsoleMessenger(log);
+  const telegramClient = config.telegramBotToken ? createTelegramClient({ token: config.telegramBotToken }, log) : undefined;
+  // One messenger for every sender: `telegram:` addresses go to Telegram, the rest to WhatsApp (or the console).
+  const messenger = createRoutingMessenger({
+    telegram: telegramClient ? createTelegramMessenger(telegramClient) : undefined,
+    fallback: whatsappMessenger,
+  });
   const search = config.exaApiKey ? createExaSearch({ apiKey: config.exaApiKey }, log) : nullSearch;
   const urlReputation = config.safeBrowsingKey ? createSafeBrowsing({ apiKey: config.safeBrowsingKey }, log) : offlineUrlReputation;
   const llm = config.openai ? createOpenAiLlm({ ...config.openai, model: config.model }) : disabledLlm;
@@ -80,5 +92,9 @@ export function createRuntime(config: Config, log: Logger): Runtime {
     simulate: createSimulateHandler(pipeline),
   });
 
-  return { config, log, db, services, pipeline, app, close: () => db.close() };
+  const telegram = telegramClient
+    ? createTelegramPoller({ client: telegramClient, pipeline, family: services.family, elders: services.elders, messenger, log })
+    : undefined;
+
+  return { config, log, db, services, pipeline, app, telegram, close: () => db.close() };
 }

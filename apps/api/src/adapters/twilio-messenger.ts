@@ -24,7 +24,9 @@ export function createTwilioMessenger(opts: TwilioMessengerOptions, log: Logger)
           signal: AbortSignal.timeout(opts.timeoutMs ?? 5_000),
         });
         if (!res.ok) {
-          log.warn("twilio send failed", { status: res.status, to });
+          // Twilio's code and message say why (unjoined sandbox number, trial limits, ...); the status alone doesn't.
+          const detail = (await res.json().catch(() => null)) as { code?: number; message?: string } | null;
+          log.warn("twilio send failed", { status: res.status, to, code: detail?.code, reason: detail?.message });
           return false;
         }
         return true;

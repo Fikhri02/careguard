@@ -5,6 +5,8 @@ export const FamilyMember = z.object({
   elderId: z.string(),
   name: z.string().nullable(),
   phone: z.string(),
+  /** Set once the family member shares their number with the Telegram bot. */
+  telegramChatId: z.string().nullable(),
   createdAt: z.string(),
 });
 export type FamilyMember = z.infer<typeof FamilyMember>;

@@ -26,6 +26,10 @@ const restoredReminders = runtime.services.reminders.restorePending();
 
 const server = runtime.app.listen(config.port, () => {
   log.info("CareGuard API listening", { port: config.port, env: config.env, fallbacks: config.fallbacks, restoredReminders });
+  if (runtime.telegram) {
+    runtime.telegram.start();
+    log.info("Telegram bot is polling for messages");
+  }
 });
 
 let shuttingDown = false;
@@ -34,6 +38,7 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   log.info("shutting down", { signal });
   server.close();
+  await runtime.telegram?.stop();
   await Promise.race([runtime.pipeline.idle(), new Promise((resolve) => setTimeout(resolve, 10_000))]);
   server.closeAllConnections(); // open SSE streams would otherwise keep the process alive
   runtime.close();

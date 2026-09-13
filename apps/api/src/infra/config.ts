@@ -16,6 +16,7 @@ export interface Config {
   twilio?: { accountSid: string; authToken: string; from: string };
   exaApiKey?: string;
   safeBrowsingKey?: string;
+  telegramBotToken?: string;
   /** Integrations running in degraded mode, e.g. "search:null". Logged at startup and on /health. */
   fallbacks: string[];
 }
@@ -34,6 +35,7 @@ const Env = z.object({
   TWILIO_WHATSAPP_FROM: z.string().optional(),
   EXA_API_KEY: z.string().optional(),
   GOOGLE_SAFE_BROWSING_KEY: z.string().optional(),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
   SEED_DEMO: z.enum(["true", "false", "1", "0"]).optional(),
 });
 
@@ -65,6 +67,7 @@ export function loadConfig(source: Record<string, string | undefined> = process.
   if (!twilio || !e.PUBLIC_URL) fallbacks.push("twilio-signature:off");
   if (!e.EXA_API_KEY) fallbacks.push("search:null");
   if (!e.GOOGLE_SAFE_BROWSING_KEY) fallbacks.push("url-reputation:offline");
+  if (!e.TELEGRAM_BOT_TOKEN) fallbacks.push("telegram:off");
 
   return {
     env: e.NODE_ENV,
@@ -78,6 +81,7 @@ export function loadConfig(source: Record<string, string | undefined> = process.
     twilio,
     exaApiKey: e.EXA_API_KEY,
     safeBrowsingKey: e.GOOGLE_SAFE_BROWSING_KEY,
+    telegramBotToken: e.TELEGRAM_BOT_TOKEN,
     fallbacks,
   };
 }

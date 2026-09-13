@@ -24,6 +24,7 @@ describe("loadConfig", () => {
       "twilio-signature:off",
       "search:null",
       "url-reputation:offline",
+      "telegram:off",
     ]);
   });
 

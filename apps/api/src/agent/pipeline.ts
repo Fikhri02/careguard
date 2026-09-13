@@ -13,8 +13,10 @@ import type { TurnQueue } from "./turn-queue.js";
 export const FALLBACK_REPLY = "Maaf, ada masalah sikit. Cuba hantar sekali lagi ya.";
 
 export interface InboundTurn {
-  /** Twilio form: `whatsapp:+60…`. */
+  /** Channel address: `whatsapp:+60…` or `telegram:<chat id>`. */
   phone: string;
+  /** Display name from the channel, used only when this elder is seen for the first time. */
+  name?: string | null;
   message: ChatCompletionUserMessageParam;
   externalId?: string | null;
   /** Where this turn's messages go: Twilio for real traffic, a CapturingMessenger for simulate/CLI. */
@@ -54,7 +56,7 @@ export function createInboundPipeline({
 }: PipelineDeps): InboundPipeline {
   return {
     handle(turn) {
-      const elder = services.elders.findOrCreateByPhone(turn.phone);
+      const elder = services.elders.findOrCreateByPhone(turn.phone, turn.name ?? null);
 
       return queue.run(elder.id, async (): Promise<InboundResult> => {
         // Persisted inside the queue so stored order matches turn order (spec §13.2).

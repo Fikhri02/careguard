@@ -15,7 +15,7 @@ describe("createRuntime", () => {
       expect(health.body).toEqual({
         ok: true,
         db: true,
-        fallbacks: ["llm:disabled", "messenger:console", "twilio-signature:off", "search:null", "url-reputation:offline"],
+        fallbacks: ["llm:disabled", "messenger:console", "twilio-signature:off", "search:null", "url-reputation:offline", "telegram:off"],
       });
 
       const sim = await request(runtime.app).post("/dev/simulate").send({ phone: "+60123456789", text: "Hai" });

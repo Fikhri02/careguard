@@ -6,6 +6,7 @@ interface FamilyRow {
   elder_id: string;
   name: string | null;
   phone: string;
+  telegram_chat_id: string | null;
   created_at: string;
 }
 
@@ -14,6 +15,7 @@ const toMember = (r: FamilyRow): FamilyMember => ({
   elderId: r.elder_id,
   name: r.name,
   phone: r.phone,
+  telegramChatId: r.telegram_chat_id,
   createdAt: r.created_at,
 });
 
@@ -33,6 +35,13 @@ export function createFamilyRepo(db: Db) {
          ON CONFLICT (elder_id, phone) DO UPDATE SET name = COALESCE(excluded.name, family_members.name)`,
       ).run(member.id, member.elderId, member.name, member.phone, member.createdAt);
       return find(member.elderId, member.phone)!;
+    },
+    /** Links every family entry with this phone to a Telegram chat. Returns the linked entries. */
+    linkTelegramByPhone(phone: string, chatId: string): FamilyMember[] {
+      db.prepare("UPDATE family_members SET telegram_chat_id = ? WHERE phone = ?").run(chatId, phone);
+      return (
+        db.prepare("SELECT * FROM family_members WHERE phone = ? ORDER BY created_at, rowid").all(phone) as FamilyRow[]
+      ).map(toMember);
     },
     listByElder(elderId: string): FamilyMember[] {
       return (
